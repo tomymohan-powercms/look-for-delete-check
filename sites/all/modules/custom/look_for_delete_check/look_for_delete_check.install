@@ -1,0 +1,27 @@
+<?php
+function look_for_delete_check_schema() {
+  $schema['field_details'] = array(
+    'description' => 'A table for storing the field details.',
+    'fields' => array(
+      'fieldname' => array(
+        'description' => 'user firstname.',
+        'type' => 'varchar',
+        'length' => 32,
+        'default' => '',
+      ),
+      'operators' => array(
+        'description' => 'user last name.',
+        'type' => 'varchar',
+        'length' => 32,
+        'default' => '',
+      ),
+      'name' => array(
+        'description' => 'user email.',
+        'type' => 'varchar',
+        'length' => 32,
+        'default' => '',
+      ),
+    ),
+  );
+  return $schema;
+}

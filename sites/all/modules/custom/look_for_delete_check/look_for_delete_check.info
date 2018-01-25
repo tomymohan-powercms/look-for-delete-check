@@ -1,0 +1,4 @@
+name = "Look for Delete Check"
+description = "A module to check the "look for delete" module."
+core = "7.x"
+files[] = look_for_delete_check.inc

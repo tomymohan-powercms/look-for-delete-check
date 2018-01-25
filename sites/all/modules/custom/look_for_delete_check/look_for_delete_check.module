@@ -1,0 +1,325 @@
+<?php
+module_load_include('inc','look_for_delete_check','look_for_delete_check');
+
+/**
+ * Implements hook_menu()
+ *
+ * @return $item
+ */
+function look_for_delete_check_menu() {
+  $item = array();
+  $item['admin/configuration/delete-contents'] = array(
+    'title' => 'CONTENT DELETE',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('look_for_delete_check_form'),
+    'access arguments' => array('access content'),
+    'description' => 'To delete the contents',
+    'type' => MENU_LOCAL_TASK,
+  );
+  $item['update-contents'] = array(
+    'title' => 'CONTENT UPDATE',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('look_for_delete_check_confirm_form'),
+    'access arguments' => array('access content'),
+    'description' => 'To update the contents',
+    'type' => MENU_CALLBACK,
+  );
+  return $item;
+}
+
+/**
+ * Custom form handler for lfd form.
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ *
+ * @return $form
+ */
+function look_for_delete_check_form($form, &$form_state) {
+  if (isset($form_state['triggering_element']) && !empty($form_state['triggering_element'])) {
+    if ($form_state['triggering_element']['#type'] == 'submit' && $form_state['triggering_element']['#value'] == 'Update') {
+      return look_for_delete_check_confirm_form($form, $form_state);
+    }
+  }
+  $form['#multistep'] = TRUE;
+  $content_types = node_type_get_names();
+  $form ['content_type'] =array(
+    '#type' => 'fieldset'
+  );
+  $form['content_type']['select_content_type'] = array(
+    '#type' => 'select',
+    '#title' => t('Content Type Selection'),
+    '#required' => TRUE,
+    '#options' => $content_types,
+    '#ajax' => array(
+      'callback' => 'look_for_delete_check_field_table',
+      'wrapper' => 'delete-form-wrapper',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ),
+  );
+  $form['nodes'] = array(
+    '#type' => 'fieldset',
+    '#collapsible' => TRUE,
+    '#tree' => TRUE,
+    '#theme' => 'look_for_delete_check_theme_field_table',
+    '#prefix' => '<div id ="delete-form-wrapper">',
+    '#suffix' => '</div>',
+  );
+  $form['range'] = array(
+    '#type' => 'textfield',
+    '#title' =>t('Range'),
+    '#size' => '15'
+  );
+  $answer = array(
+    'delete_user' => t('Delete USER who add this to these contents.'),
+  );
+  $form['userdelete'] = array(
+    '#type' => 'checkboxes',
+    '#options' => $answer,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Update'),
+    '#validate' => array('look_for_delete_check_form_custom_validate'),
+    '#submit' => array('look_for_delete_check_form_submit'),
+  );
+  $options = array(
+    'delete' => t('Delete'),
+    'publish' => t('Publish'),
+    'unpublish' => t('Unpublish'),
+  );
+  $form['nodes']['update'] = array(
+    '#type' => 'checkboxes',
+    '#options' => $options,
+  );
+  $form = look_for_delete_check_assigning_operators($form, $form_state);
+  return $form;
+}
+
+/**
+ * Custom form handler for lfd form.
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ *
+ * @return $form
+ */
+function look_for_delete_check_table_structure($form, $form_state , &$default_content, &$machine_name) {
+  $default_content = isset($form_state['input']['select_content_type']) ?
+    $form_state['input']['select_content_type'] : '';
+  $machine_name = field_info_instances('node', $default_content);
+  if (!empty($default_content)) {
+    //title_name search row.
+    $field_title_operators = array(
+      '=' => 'Equal to',
+      '!=' => 'Not Equal to',
+      'NOT LIKE' => 'Does not contain',
+      'LIKE' => 'Contains',
+    );
+    $form['nodes']['title']['fieldname'] = array(
+      '#type' => 'markup',
+      '#markup' => 'Title',
+      '#size' => '20',
+    );
+    $form['nodes']['title']['operator'] = array(
+      '#type' => 'select',
+      '#options' => $field_title_operators,
+    );
+    $form['nodes']['title']['search_name'] = array(
+      '#type' => 'textfield',
+      '#size' => '20',
+    );
+  }
+  return $form;
+}
+
+/**
+ * Assigning operators for different field types.
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ *
+ * @return $form
+ */
+function look_for_delete_check_assigning_operators($form, &$form_state) {
+    //field_info search rows.
+    $form =  look_for_delete_check_table_structure($form, $form_state ,$default_content, $machine_name);
+    foreach ($machine_name as $key => $value) {
+      $form['nodes'][$key]['fieldname'] = array(
+        '#type' => 'markup',
+        '#markup' => $value['field_name'],
+      );
+      if ($machine_name[$key]['widget']['type'] == 'text_textarea_with_summary') {
+        $field_operators = array(
+          'NOT LIKE' => 'Does not contain',
+          'LIKE' => 'Contains',
+        );
+        $form['nodes'][$key]['operator'] = array(
+          '#type' => 'select',
+          '#options' => $field_operators,
+        );
+      }
+      elseif ($machine_name[$key]['widget']['type'] == 'number') {
+        $field_operators = array(
+          '=' => 'Equal to',
+          '!=' => 'Not Equal to',
+          'LIKE' => 'Contains',
+          'NOT LIKE' => 'Does not contain',
+          '>' => 'Greater Than',
+          '<' => 'Less Than',
+          '<=' => 'Less than or Equal to',
+          '>=' => 'Greater than or Equal to'
+        );
+        $form['nodes'][$key]['operator'] = array(
+          '#type' => 'select',
+          '#options' => $field_operators,
+        );
+      }
+      else {
+        $field_operators = array(
+          '=' => 'Equal to',
+          '!=' => 'Not Equal to',
+          'NOT LIKE' => 'Does not contain',
+          'LIKE' => 'Contains',
+        );
+        $form['nodes'][$key]['operator'] = array(
+          '#type' => 'select',
+          '#options' => $field_operators,
+        );
+      }
+      $form['nodes'][$key]['search_name'] = array(
+        '#type' => 'textfield',
+        '#size' => '20',
+      );
+    }
+  //
+  return $form;
+}
+
+/**
+ * Custom table for lfd formlook_for_delete_confirm_form
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ *
+ * @return $form['nodes']
+ */
+function look_for_delete_check_field_table($form, &$form_state) {
+  return $form['nodes'];
+}
+
+/**
+ * Implements hook_theme().
+ *
+ * @return $theme
+ */
+function look_for_delete_check_theme() {
+  $theme['look_for_delete_check_theme_field_table'] = array(
+    'render element' => 'element',
+  );
+  return $theme;
+}
+
+/**
+ *implement hook_theme_table().
+ *
+ * @param $variables
+ *  Table object
+ *
+ * @return $output
+ */
+function theme_look_for_delete_check_theme_field_table($variables) {
+  $element = $variables['element'];
+  $rows = array();
+  foreach (element_children($element) as $id) {
+    // Mark the table row as draggable for TableDrag.
+    $row = array(
+      'data' => array(),
+      'class' => array('draggable'),
+    );
+    // Render the table columns.
+    $row['data'][] = drupal_render($element[$id]['fieldname']);
+    $row['data'][] = drupal_render($element[$id]['operator']);
+    $row['data'][] = drupal_render($element[$id]['search_name']);
+    $rows[] = $row;
+  }
+  //Build the table header.
+  $header = array(
+    t('Field Name'),
+    t('Operator'),
+    t('Desired File Name'),
+  );
+  // Render the table.
+  // Note: For TableSelect instead of TableDrag, you would have specified
+  //   'tableselect' as render element #type and passed the $rows as 'options'
+  //   instead of 'rows'.
+  $output = theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'empty' => t('No content available.'),
+    'attributes' => array('id' => 'look_for_delete_check-order'),
+  ));
+  $output .= drupal_render_children($element);
+  return $output;
+}
+
+/**
+ * Custom form_validation.
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ */
+function look_for_delete_check_form_custom_validate($form, &$form_state) {
+  if (!empty($form_state['input']['select_content_type'])) {
+    $update_option = array_filter($form_state['input']['nodes']['update']);
+    $delete = array_filter($form_state['input']['userdelete']);
+    if ((!empty($update_option)) || (!empty($delete))) {
+      $currentfields = $form_state['input']['nodes'];
+      $state = 0;
+      foreach ($currentfields as $key1 => $value1) {
+        if (!empty($value1['search_name'])) {
+          $state = 1;
+        }
+      }
+      if ($state != 1) {
+        form_set_error('nodes', 'Please type desired file name');
+      }
+    }
+    else {
+      form_set_error('update', 'Please select any update option');
+    }
+  }
+  else {
+    form_set_error('content_type', 'Please select any content type');
+  }
+}
+
+/**
+ * Custom form_submit.
+ *
+ * @param $form
+ *  Form object
+ *
+ * @param $form_state
+ *  Form state values
+ */
+function look_for_delete_check_form_submit($form, &$form_state) {
+  $form_state['rebuild'] = TRUE;
+}
+
